@@ -1,0 +1,29 @@
+name: 每日AI资讯收集
+
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: 安装Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      
+      - name: 安装依赖
+        run: pip install requests feedparser
+      
+      - name: 运行资讯收集
+        run: python ai_news_collector.py
+      
+      - name: 上传表格
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-news-csv
+          path: ai_news_*.csv
