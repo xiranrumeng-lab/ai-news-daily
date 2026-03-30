@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-AI资讯收集器 v3.0 - 优化版
+AI资讯收集器 v3.1 - 增强版
 自动收集AI行业资讯，分类、标记重点、生成报告
 
 优化内容：
+- 增加更多信源（国内外AI资讯、技术博客、论文平台等）
+- 结果统一存放在result文件夹
 - 改进去重算法：标题相似度检测、URL标准化
 - 翻译优化：重试机制、超时保护
 - 错误恢复：网络容错、请求限流
@@ -41,6 +43,7 @@ except ImportError:
 
 # ========== 路径工具 ==========
 SCRIPT_DIR = Path(__file__).resolve().parent
+RESULT_DIR = SCRIPT_DIR / "result"  # 结果输出目录
 
 
 def find_config(config_path=None):
@@ -63,7 +66,7 @@ def load_config(config_path=None):
     if cfg_file and HAS_YAML:
         with open(cfg_file, encoding="utf-8") as f:
             return yaml.safe_load(f)
-    # 回退默认配置
+    # 回退默认配置（增强版：更多信源）
     return {
         "translation": {
             "enabled": True,
@@ -73,15 +76,55 @@ def load_config(config_path=None):
             "timeout_seconds": 10
         },
         "sources": [
+            # ========== 国外主流AI资讯 ==========
             {"name": "OpenAI Blog", "url": "https://openai.com/blog/rss.xml", "type": "英文", "limit": 15},
+            {"name": "Google AI Blog", "url": "https://ai.googleblog.com/feeds/posts/default", "type": "英文", "limit": 15},
+            {"name": "DeepMind Blog", "url": "https://deepmind.google/blog/rss/", "type": "英文", "limit": 15},
+            {"name": "Meta AI", "url": "https://ai.meta.com/blog/feed/", "type": "英文", "limit": 15},
+            {"name": "Anthropic News", "url": "https://www.anthropic.com/news/rss.xml", "type": "英文", "limit": 10},
+            {"name": "Microsoft AI", "url": "https://www.microsoft.com/en-us/research/blog/feed/", "type": "英文", "limit": 15},
+            {"name": "Hugging Face Blog", "url": "https://huggingface.co/blog/feed.xml", "type": "英文", "limit": 15},
+            {"name": "MIT News AI", "url": "http://news.mit.edu/topic/artificial-intelligence2/rss.xml", "type": "英文", "limit": 10},
+            {"name": "ArXiv CS.AI", "url": "http://export.arxiv.org/rss/cs.AI", "type": "英文", "limit": 20},
+            {"name": "ArXiv CS.LG", "url": "http://export.arxiv.org/rss/cs.LG", "type": "英文", "limit": 20},
+            {"name": "ArXiv CS.CL", "url": "http://export.arxiv.org/rss/cs.CL", "type": "英文", "limit": 15},
+            {"name": "ArXiv cs.SD", "url": "http://export.arxiv.org/rss/cs.SD", "type": "英文", "limit": 15},  # 语音处理
+            
+            # ========== 国内AI资讯 ==========
             {"name": "量子位", "url": "https://www.qbitai.com/feed", "type": "中文", "limit": 20},
+            {"name": "机器之心", "url": "https://www.jiqizhixin.com/rss", "type": "中文", "limit": 20},
+            {"name": "新智元", "url": "https://www.aiera.com.cn/rss", "type": "中文", "limit": 15},
+            {"name": "AI科技评论", "url": "https://www.leiphone.com/category/ai/feed", "type": "中文", "limit": 15},
+            {"name": "36氪AI", "url": "https://36kr.com/feed?cid=53", "type": "中文", "limit": 15},
+            {"name": "虎嗅AI", "url": "https://www.huxiu.com/rss/all.xml", "type": "中文", "limit": 15},
+            {"name": "InfoQ AI", "url": "https://www.infoq.cn/feed", "type": "中文", "limit": 15},
+            {"name": "OSChina AI", "url": "https://www.oschina.net/news/rss?catalog=ai", "type": "中文", "limit": 15},
+            
+            # ========== 垂直领域 ==========
+            {"name": "语音技术", "url": "https://speechtech.io/feed", "type": "英文", "limit": 10},
+            {"name": "ElevenLabs Blog", "url": "https://elevenlabs.io/blog/rss/", "type": "英文", "limit": 10},
+            {"name": "Runway Blog", "url": "https://runwayml.com/blog/rss/", "type": "英文", "limit": 10},
+            {"name": "Stability AI", "url": "https://stability.ai/blog/rss.xml", "type": "英文", "limit": 10},
+            {"name": "Midjourney", "url": "https://docs.midjourney.com/feed.xml", "type": "英文", "limit": 8},
+            
+            # ========== 技术社区 ==========
+            {"name": "Towards Data Science", "url": "https://towardsdatascience.com/feed", "type": "英文", "limit": 15},
+            {"name": "Analytics Vidhya", "url": "https://www.analyticsvidhya.com/blog/feed/", "type": "英文", "limit": 10},
+            {"name": "KDnuggets", "url": "https://www.kdnuggets.com/feed", "type": "英文", "limit": 10},
         ],
         "schedule": {"interval_hours": 6, "first_run_delay_minutes": 0},
-        "output": {"csv": "ai_news_report.csv", "html": "ai_news_report.html", "list": "ai_news_list.txt", "html_max_items": 100},
+        "output": {
+            "output_dir": "result",  # 输出目录
+            "csv": "ai_news_report.csv",
+            "html": "ai_news_report.html", 
+            "list": "ai_news_list.txt",
+            "html_max_items": 100
+        },
         "deduplication": {
             "title_similarity_threshold": 0.85,
             "enable_url_dedup": True,
-            "enable_content_dedup": True
+            "enable_content_dedup": True,
+            "enable_cross_source_dedup": True  # 跨源去重
         },
         "html_priority": {
             "sections": [
@@ -909,14 +952,14 @@ document.addEventListener('DOMContentLoaded', function() {{
 }});
 </script>
 </head>
-<body><div class="header"><h1>👁️ AI行业资讯日报</h1><div class="meta">{date_str} | AI News Collector v3.0</div></div>
+<body><div class="header"><h1>👁️ AI行业资讯日报</h1><div class="meta">{date_str} | AI News Collector v3.1</div></div>
 <div class="stats">{stats_div}</div>
 {imp_section}
 {domain_html}
 {company_html}
 {efficiency_html}
 {other_html}
-<div class="footer"><p>{cat_stats}</p><p style="margin-top:8px">由 AI资讯收集器 v3.0 自动生成</p></div>
+<div class="footer"><p>{cat_stats}</p><p style="margin-top:8px">由 AI资讯收集器 v3.1 自动生成</p></div>
 </body></html>"""
     return html
 
@@ -944,9 +987,11 @@ def collect_news(config):
     enable_url_dedup = dedup_cfg.get("enable_url_dedup", True)
     enable_content_dedup = dedup_cfg.get("enable_content_dedup", True)
 
-    for src in sources:
+    logging.info(f"📡 开始采集 {len(sources)} 个RSS源...")
+    
+    for idx, src in enumerate(sources, 1):
         limit = src.get("limit", 15)
-        logging.info(f"📡 {src['name']}...")
+        logging.info(f"[{idx}/{len(sources)}] 📡 {src['name']}...")
         
         # 抓取RSS，带超时保护
         items = fetch_rss(src["url"], limit, timeout=30)
@@ -954,7 +999,7 @@ def collect_news(config):
             logging.warning(f"  ⚠️ 未获取到数据")
             continue
         
-        logging.info(f"  获取 {len(items)} 条")
+        logging.info(f"  ✅ 获取 {len(items)} 条")
 
         src_kept = 0
         for item in items:
@@ -1022,6 +1067,7 @@ def collect_news(config):
                 "类型": smart_category(item["title"], item["summary"]),
                 "是否重要": "是" if is_important(item["title"], item["summary"]) else "否",
                 "信息链接": item["link"],
+                "来源": src["name"],  # 记录来源
             })
 
         logging.info(f"  → AI相关 {src_kept} 条")
@@ -1046,9 +1092,9 @@ def save_csv(items, filename):
         # 如果没有openpyxl，使用简单的CSV格式
         with open(filename, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.writer(f)
-            writer.writerow(["时间", "公司", "资讯标题", "总结的重点", "信息来源网址链接", "信息类别", "是否重要"])
+            writer.writerow(["时间", "公司", "资讯标题", "总结的重点", "信息来源网址链接", "信息类别", "是否重要", "来源"])
             for item in items:
-                writer.writerow([item[k] for k in ["时间", "公司", "资讯标题", "重点内容", "信息链接", "类型", "是否重要"]])
+                writer.writerow([item[k] for k in ["时间", "公司", "资讯标题", "重点内容", "信息链接", "类型", "是否重要", "来源"]])
         return
 
     # 使用openpyxl创建带样式的Excel文件
@@ -1081,7 +1127,7 @@ def save_csv(items, filename):
     alt_row_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
 
     # 写入表头
-    headers = ["时间", "公司名称", "文章标题", "总结的重点", "信息来源网址链接", "信息类别", "是否重要"]
+    headers = ["时间", "公司名称", "文章标题", "总结的重点", "信息来源网址链接", "信息类别", "是否重要", "来源"]
     for col_num, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_num)
         cell.value = header
@@ -1161,15 +1207,25 @@ def save_csv(items, filename):
             imp_cell.font = row_font
         if row_num % 2 == 0 and item["是否重要"] != "是":
             imp_cell.fill = alt_row_fill
+        
+        # 来源列
+        source_cell = ws.cell(row=row_num, column=8)
+        source_cell.value = item.get("来源", "")
+        source_cell.font = row_font
+        source_cell.alignment = data_alignment
+        source_cell.border = thin_border
+        if row_num % 2 == 0:
+            source_cell.fill = alt_row_fill
 
     # 调整列宽
     ws.column_dimensions['A'].width = 15  # 时间
     ws.column_dimensions['B'].width = 15  # 公司名称
-    ws.column_dimensions['C'].width = 30  # 文章标题
+    ws.column_dimensions['C'].width = 35  # 文章标题
     ws.column_dimensions['D'].width = 50  # 总结的重点
     ws.column_dimensions['E'].width = 40  # 信息来源网址链接
     ws.column_dimensions['F'].width = 15  # 信息类别
     ws.column_dimensions['G'].width = 10  # 是否重要
+    ws.column_dimensions['H'].width = 20  # 来源
 
     # 设置表头行高
     ws.row_dimensions[1].height = 25
@@ -1182,9 +1238,9 @@ def save_csv(items, filename):
     # 同时生成CSV格式（兼容性）
     with open(filename, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.writer(f)
-        writer.writerow(["时间", "公司名称", "文章标题", "总结的重点", "信息来源网址链接", "信息类别", "是否重要"])
+        writer.writerow(["时间", "公司名称", "文章标题", "总结的重点", "信息来源网址链接", "信息类别", "是否重要", "来源"])
         for item in items:
-            writer.writerow([item[k] for k in ["时间", "公司", "资讯标题", "重点内容", "信息链接", "类型", "是否重要"]])
+            writer.writerow([item[k] for k in ["时间", "公司", "资讯标题", "重点内容", "信息链接", "类型", "是否重要", "来源"]])
 
 
 def save_list(items, filename):
@@ -1194,10 +1250,12 @@ def save_list(items, filename):
     COL_CAT = 10
     COL_IMP = 6
     COL_TITLE = 50
+    COL_SOURCE = 20
 
     sep = "+" + "-" * (COL_TIME + 2) + "+" + "-" * (COL_COMPANY + 2) + "+" \
         + "-" * (COL_TITLE + 2) + "+" + "-" * 32 + "+" \
-        + "-" * (COL_CAT + 2) + "+" + "-" * (COL_IMP + 2) + "+" + "-" * 52 + "+"
+        + "-" * (COL_CAT + 2) + "+" + "-" * (COL_IMP + 2) + "+" \
+        + "-" * (COL_SOURCE + 2) + "+" + "-" * 52 + "+"
 
     def _trunc(s, w):
         return s[:w-1] + "…" if len(s) > w else s
@@ -1214,15 +1272,16 @@ def save_list(items, filename):
 
     with open(filename, "w", encoding="utf-8") as f:
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
-        f.write(f"{'='*130}\n")
+        f.write(f"{'='*140}\n")
         f.write(f"  AI行业资讯列表 - {now}    共 {len(items)} 条\n")
-        f.write(f"{'='*130}\n\n")
+        f.write(f"{'='*140}\n\n")
 
         # 表头
         f.write(sep + "\n")
         f.write(f"| {'时间':^{COL_TIME}} | {'公司':^{COL_COMPANY}} | "
                 f"{'资讯标题':^{COL_TITLE}} | {'重点信息':30} | "
-                f"{'分类':^{COL_CAT}} | {'重点':^{COL_IMP}} | {'链接':50} |\n")
+                f"{'分类':^{COL_CAT}} | {'重点':^{COL_IMP}} | "
+                f"{'来源':^{COL_SOURCE}} | {'链接':50} |\n")
         f.write(sep + "\n")
 
         for item in items:
@@ -1231,6 +1290,7 @@ def save_list(items, filename):
             title = _trunc(item["资讯标题"], COL_TITLE)
             cat = _trunc(item["类型"], COL_CAT)
             imp = "⭐" if item["是否重要"] == "是" else ""
+            source = _trunc(item.get("来源", ""), COL_SOURCE)
             link = item["信息链接"]
             points = item["重点内容"].replace("\n", " | ") if item["重点内容"] else "暂无"
 
@@ -1251,11 +1311,13 @@ def save_list(items, filename):
                 if i == 0:
                     f.write(f"| {time_str:<{COL_TIME}} | {company:<{COL_COMPANY}} | "
                             f"{t:<{COL_TITLE}} | {p:<30} | "
-                            f"{cat:<{COL_CAT}} | {imp:^{COL_IMP}} | {l:<50} |\n")
+                            f"{cat:<{COL_CAT}} | {imp:^{COL_IMP}} | "
+                            f"{source:<{COL_SOURCE}} | {l:<50} |\n")
                 else:
                     f.write(f"| {'':<{COL_TIME}} | {'':<{COL_COMPANY}} | "
                             f"{t:<{COL_TITLE}} | {p:<30} | "
-                            f"{'':<{COL_CAT}} | {'':^{COL_IMP}} | {l:<50} |\n")
+                            f"{'':<{COL_CAT}} | {'':^{COL_IMP}} | "
+                            f"{'':<{COL_SOURCE}} | {l:<50} |\n")
 
             f.write(sep + "\n")
 
@@ -1277,8 +1339,12 @@ def main():
             break
 
     config = load_config(cfg_path)
+    
+    # 创建result目录
+    result_dir = SCRIPT_DIR / config.get("output", {}).get("output_dir", "result")
+    result_dir.mkdir(parents=True, exist_ok=True)
 
-    ap = argparse.ArgumentParser(description="AI行业资讯收集器 v3.0 - 优化版", formatter_class=argparse.RawDescriptionHelpFormatter, epilog="""
+    ap = argparse.ArgumentParser(description="AI行业资讯收集器 v3.1 - 增强版", formatter_class=argparse.RawDescriptionHelpFormatter, epilog="""
 用法示例:
   python ai_news_collector_optimized.py              # 运行一次
   python ai_news_collector_optimized.py --schedule   # 按config间隔循环采集
@@ -1323,40 +1389,35 @@ def main():
 
     interval = args.every or config.get("schedule", {}).get("interval_hours", 6)
     out = config.get("output", {})
-    output_dir = out.get("output_dir", "")
     
     # 生成时间戳
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    if output_dir:
-        Path(output_dir).mkdir(parents=True, exist_ok=True)
-        csv_file = str(Path(output_dir) / f"{out.get('csv', 'ai_news_report').split('.')[0]}_{timestamp}.csv")
-        html_file = str(Path(output_dir) / f"{out.get('html', 'ai_news_report').split('.')[0]}_{timestamp}.html")
-        list_file = str(Path(output_dir) / f"{out.get('list', 'ai_news_list').split('.')[0]}_{timestamp}.txt")
-    else:
-        csv_file = f"{out.get('csv', 'ai_news_report').split('.')[0]}_{timestamp}.csv"
-        html_file = f"{out.get('html', 'ai_news_report').split('.')[0]}_{timestamp}.html"
-        list_file = f"{out.get('list', 'ai_news_list').split('.')[0]}_{timestamp}.txt"
+    # 所有输出文件都放在result目录下
+    csv_file = result_dir / f"{out.get('csv', 'ai_news_report').split('.')[0]}_{timestamp}.csv"
+    html_file = result_dir / f"{out.get('html', 'ai_news_report').split('.')[0]}_{timestamp}.html"
+    list_file = result_dir / f"{out.get('list', 'ai_news_list').split('.')[0]}_{timestamp}.txt"
 
     def run_once():
         logging.info("=" * 60)
-        logging.info(f"🤖 AI资讯收集器 v3.0 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logging.info(f"🤖 AI资讯收集器 v3.1 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         logging.info("=" * 60)
         items, filtered, trans_fail = collect_news(config)
         if items:
-            save_csv(items, csv_file)
-            save_list(items, list_file)
+            save_csv(items, str(csv_file))
+            save_list(items, str(list_file))
             max_html = out.get("html_max_items", 100)
-            save_html(items[:max_html], html_file, config)
+            save_html(items[:max_html], str(html_file), config)
         logging.info("=" * 60)
         logging.info(f"✅ 收集完成！共 {len(items)} 条AI相关资讯")
         logging.info(f"📊 已过滤 {filtered} 条（不含AI关键词）")
         if config.get("translation", {}).get("enabled"):
             logging.info(f"📝 翻译失败 {trans_fail} 条（已保留原文）")
         if items:
-            logging.info(f"📁 CSV: {csv_file}")
-            logging.info(f"📄 列表: {list_file}")
-            logging.info(f"🌐 HTML: {html_file}")
+            logging.info(f"📁 输出目录: {result_dir}")
+            logging.info(f"📊 CSV: {csv_file.name}")
+            logging.info(f"📄 列表: {list_file.name}")
+            logging.info(f"🌐 HTML: {html_file.name}")
             cats = {}
             for n in items:
                 cats[n["类型"]] = cats.get(n["类型"], 0) + 1
