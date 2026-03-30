@@ -43,11 +43,69 @@ except ImportError:
 
 # ========== 路径工具 ==========
 SCRIPT_DIR = Path(__file__).resolve().parent
-RESULT_DIR = SCRIPT_DIR / "result"  # 结果输出目录
+
+
+def ensure_result_dir(result_dir):
+    """创建result目录并添加.gitkeep文件（用于GitHub）"""
+    result_dir.mkdir(parents=True, exist_ok=True)
+    
+    # 创建.gitkeep文件，确保GitHub能保留这个文件夹
+    gitkeep_file = result_dir / ".gitkeep"
+    if not gitkeep_file.exists():
+        try:
+            with open(gitkeep_file, 'w', encoding='utf-8') as f:
+                f.write("# 此目录用于存放生成的AI资讯报告文件\n")
+                f.write("# 文件格式：CSV、HTML、TXT\n")
+                f.write("# 文件名包含时间戳，如：ai_news_report_20241215_143022.csv\n")
+        except Exception as e:
+            logging.debug(f"创建.gitkeep失败: {e}")
+    
+    # 创建README.md说明文件
+    readme_file = result_dir / "README.md"
+    if not readme_file.exists():
+        try:
+            with open(readme_file, 'w', encoding='utf-8') as f:
+                f.write("# 生成报告目录\n\n")
+                f.write("本目录存放AI资讯收集器生成的报告文件：\n\n")
+                f.write("- `*.csv` - CSV格式报告（包含Excel格式）\n")
+                f.write("- `*.html` - HTML可视化报告\n")
+                f.write("- `*.txt` - 文本格式列表\n\n")
+                f.write("## 文件命名规则\n\n")
+                f.write("文件格式：`ai_news_report_YYYYMMDD_HHMMSS.扩展名`\n\n")
+                f.write("## 自动清理\n\n")
+                f.write("建议定期清理旧文件，保留最近30天的报告。\n")
+        except Exception as e:
+            logging.debug(f"创建README.md失败: {e}")
+    
+    return result_dir
+
+
+def clean_old_reports(result_dir, days_to_keep=30):
+    """清理旧的报告文件，保留最近N天的文件"""
+    if not result_dir.exists():
+        return
+    
+    cutoff_time = datetime.now() - timedelta(days=days_to_keep)
+    cleaned_count = 0
+    
+    for file_pattern in ["*.csv", "*.xlsx", "*.html", "*.txt"]:
+        for file_path in result_dir.glob(file_pattern):
+            try:
+                # 获取文件修改时间
+                file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
+                if file_mtime < cutoff_time:
+                    file_path.unlink()
+                    cleaned_count += 1
+                    logging.debug(f"清理旧文件: {file_path.name}")
+            except Exception as e:
+                logging.debug(f"清理文件失败 {file_path}: {e}")
+    
+    if cleaned_count > 0:
+        logging.info(f"🧹 清理了 {cleaned_count} 个超过 {days_to_keep} 天的旧报告")
 
 
 def find_config(config_path=None):
-    """定位config.yaml：优先参数，再找脚本同级，最后找exe同级"""
+    """定位config.yaml: 优先参数，再找脚本同级，最后找exe同级"""
     if config_path:
         p = Path(config_path)
         if p.exists():
